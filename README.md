@@ -9,4 +9,4 @@ But:
 - I wrote missing Casbin related configs.
 - I fexed Casbin related code, there was a little bug.
 - I try to use DTOs instead of set of functions parameters.
-- I changed orm(PostgreSql) to MongoDB (mainly for the sake of experimentation).
+- You can swith between orm(Postgresql) and MongoDB with just a sigle line config
