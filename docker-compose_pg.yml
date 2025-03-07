@@ -1,0 +1,79 @@
+services:
+  postgres:
+    build:
+      context: ./pg
+      dockerfile: Dockerfile
+    image: template_go_react_pg
+    container_name: template_go_react_pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: okokokok
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - template_go_react_network      
+    profiles:
+      - db
+      - all
+
+  pgadmin:
+    image: dpage/pgadmin4:8.9
+    container_name: template_go_react_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: andriyk@example.com
+      PGADMIN_DEFAULT_PASSWORD: okokokok
+    ports:
+      - "8081:80"
+    depends_on:
+      - postgres
+    networks:
+      - template_go_react_network      
+    profiles:
+      - db
+      - all   
+
+
+  backend:
+    build:
+      context: ./golang-ddd-template
+      dockerfile: Dockerfile
+    image: template_go_react_golang
+    container_name: template_go_react_golang
+    environment:
+      DBTYPE: pg
+      PGCASBINURI: postgres://postgres:okokokokd@postgres:5432/casbin
+      PGWEATHERURI: postgres://postgres:okokokokd@postgres:5432/weather
+    ports:
+      - "8080:8080"
+    networks:
+      - template_go_react_network
+    depends_on:
+      - postgres
+    profiles:
+      - backend
+      - all
+
+
+  frontend:
+    build:
+      context: ./react-admin-template
+      dockerfile: Dockerfile
+    image: template_go_react_react_cui  
+    container_name: template_go_react_react_cui
+    ports:
+      - "3000:3000"
+    networks:
+      - template_go_react_network
+    environment:
+      - VITE_PROXY_TARGET=http://template_go_react_golang:8080
+    depends_on:
+      - backend
+    profiles:
+      - frontend
+      - all
+
+
+networks:
+  template_go_react_network:
+    driver: bridge 

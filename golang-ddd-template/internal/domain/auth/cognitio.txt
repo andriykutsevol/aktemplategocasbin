@@ -1,0 +1,394 @@
+Casbin
+You can use Casbin to manage permissions and roles within your application.
+
+Amazon Cognito
+Amazon Cognito provides user 
+    authentication, 
+    authorization, 
+    and user management for web and mobile apps.
+
+
+Use Cognito to handle user authentication. 
+    Users will sign up and log in through Cognito, 
+    which will manage their credentials and authentication tokens.
+
+
+Authorization with Casbin:
+
+    Assign Roles: 
+        After a user logs in through Cognito, 
+            assign roles to the user. 
+            These roles can be stored in Cognito user attributes or a separate database.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+We have:
+
+    ----------------------------------------------
+    internal/presentation/http/handler/login.go
+    ----------------------------------------------
+
+    // !!! The Login function should be changed. !!!
+
+            func (a *login) Login(c *gin.Context) {
+
+                ctx := c.Request.Context()
+                var item request.LoginParam
+                if err := http.ParseJSON(c, &item); err != nil {
+                    http.ResError(c, err)
+                    return
+                }
+
+                // if !captcha.VerifyString(item.CaptchaID, item.CaptchaCode) {
+                // 	api.ResError(c, errors.New400Response("Invalid Captcha"))
+                // 	return
+                // }
+
+                // !!! For now we are just comparing username and password !!!
+
+                user, err := a.loginApp.Verify(ctx, item.UserName, item.Password)
+                if err != nil {
+                    http.ResError(c, err)
+                    return
+                }
+
+                userID := user.ID
+                http.SetUserID(c, userID)
+
+                tokenInfo, err := a.loginApp.GenerateToken(ctx, userID)
+                if err != nil {
+                    http.ResError(c, err)
+                    return
+                }
+
+                respTokenInfo := new(response.LoginTokenInfo)
+                structure.Copy(tokenInfo, respTokenInfo)
+                // ctx = logger.NewUserIDContext(ctx, userID)
+                // ctx = logger.NewTagContext(ctx, "__login__")
+                // logger.WithContext(ctx).Infof("logged in")
+                http.ResSuccess(c, respTokenInfo)
+
+            }
+
+
+    ----------------------------------------------
+    internal/app/application/login.go
+    ----------------------------------------------
+
+            func (l loginApp) Verify(ctx context.Context, userName, password string) (*user.User, error) {
+                if rootUser := l.authRepo.FindRootUser(ctx, userName); rootUser != nil {
+                    if password == rootUser.Password {
+                        return &user.User{
+                            UserName: rootUser.UserName,
+                            Password: rootUser.Password,
+                        }, nil
+                    }
+                }
+
+
+                // ! Query username to get the password.
+
+                result, _, err := l.userRepo.Query(ctx, user.QueryParams{
+                    UserName: userName,
+                })
+                
+                if err != nil {
+                    return nil, err
+                }
+                if len(result) == 0 {
+                    return nil, errors.ErrInvalidUserName
+                }
+
+                // ! We compare the user's password and the password entered from the frontend.
+
+                item := result[0]
+                if item.Password != hash.SHA1String(password) {
+                    return nil, errors.ErrInvalidPassword
+                }
+                if item.Status != 1 {
+                    return nil, errors.ErrUserDisable
+                }
+                return item, nil
+            }
+
+    ----------------------------------------------
+    internal/infrastructure/redis/auth/repository.go
+    ----------------------------------------------
+
+        // ! The VERY ROOT USER is created from the "defaultOptions" - encoded to the binary file, or can be read from config file.
+
+        var defaultOptions = options{
+            tokenType:     "Bearer",
+            expired:       172000,
+            signingMethod: jwt.SigningMethodHS512,
+            signingKey:    []byte(defaultKey),
+            keyFunc: func(t *jwt.Token) (interface{}, error) {
+                if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+                    return nil, auth.ErrInvalidToken
+                }
+                return []byte(defaultKey), nil
+            },
+            rootUser: auth.RootUser{UserName: "root", Password: "rootpwd"},
+        }
+
+
+        func (a *AuthRepository) FindRootUser(ctx context.Context, userName string) *auth.RootUser {
+            if userName == a.opts.rootUser.UserName {
+                return &auth.RootUser{
+                    UserName: userName,
+                    Password: a.opts.rootUser.Password,
+                }
+            }
+            return nil
+        }
+
+
+
+=====================================================
+Cognito
+=====================================================
+
+
+    ----------------------------------------------
+    Retrieve JWT token after successful authentication.
+    ----------------------------------------------
+
+
+
+        // Function to authenticate user with Cognito and get JWT token
+        func authenticateUser(username, password string) (string, error) {
+            svc := cognitoidentityprovider.New(session.New(), &aws.Config{Region: aws.String("us-west-2")})
+
+            authInput := &cognitoidentityprovider.InitiateAuthInput{
+                AuthFlow: aws.String("USER_PASSWORD_AUTH"),
+                AuthParameters: map[string]*string{
+                    "USERNAME": aws.String(username),
+                    "PASSWORD": aws.String(password),
+                },
+                ClientId: aws.String("your_cognito_app_client_id"),
+            }
+
+            authOutput, err := svc.InitiateAuth(authInput)
+            if err != nil {
+                return "", err
+            }
+
+            return *authOutput.AuthenticationResult.IdToken, nil
+        }
+
+
+----------
+Therfore, instead fo queying the database (user table)
+        CREATE TABLE IF NOT EXISTS casbin."user"
+        (
+            id uuid NOT NULL,
+            username character varying(100) COLLATE pg_catalog."default" NOT NULL,
+            realname character varying(200) COLLATE pg_catalog."default",
+            password character varying(200) COLLATE pg_catalog."default" NOT NULL,
+            email character varying(200) COLLATE pg_catalog."default",
+            phone character varying(50) COLLATE pg_catalog."default",
+            status integer NOT NULL,
+            creator uuid,
+            createdat timestamp with time zone NOT NULL,
+            updatedat timestamp with time zone,
+            deletedat timestamp with time zone,
+            idstring character varying(200) COLLATE pg_catalog."default",
+            CONSTRAINT user_pkey PRIMARY KEY (id)
+        );
+
+
+We have to query AWS cognition to get the jwt token.
+
+        // !!! Function to authenticate user with Cognito and get JWT token !!!
+
+        func authenticateUser(username, password string) (string, error) {
+            svc := cognitoidentityprovider.New(session.New(), &aws.Config{Region: aws.String("us-west-2")})
+
+            authInput := &cognitoidentityprovider.InitiateAuthInput{
+                AuthFlow: aws.String("USER_PASSWORD_AUTH"),
+                AuthParameters: map[string]*string{
+                    "USERNAME": aws.String(username),
+                    "PASSWORD": aws.String(password),
+                },
+                ClientId: aws.String("your_cognito_app_client_id"),
+            }
+
+            authOutput, err := svc.InitiateAuth(authInput)
+            if err != nil {
+                return "", err
+            }
+
+            return *authOutput.AuthenticationResult.IdToken, nil
+        }
+
+
+
+
+=====================================================
+It was authentication (the casbin wasn't involved), But we do not use the "user" table from our PostgreSQL database already. !
+=====================================================
+
+
+
+
+=====================================================
+Now let's consider what will happens when user already has it's JWT token from the Cognito.
+=====================================================
+
+We have.
+
+    ----------------------------------------------
+    internal/infrastructure/redis/auth/repository.go
+    ----------------------------------------------
+
+            func (a *AuthRepository) parseToken(tokenString string) (*jwt.StandardClaims, error) {
+                token, err := jwt.ParseWithClaims(tokenString, &jwt.StandardClaims{}, a.opts.keyFunc)
+                if err != nil {
+                    return nil, err
+                } else if !token.Valid {
+                    return nil, auth.ErrInvalidToken
+                }
+
+                return token.Claims.(*jwt.StandardClaims), nil
+            }
+
+
+            func (r *AuthRepository) ParseUserID(ctx context.Context, tokenString string) (string, error) {
+
+                if tokenString == "" {
+                    return "", auth.ErrInvalidToken
+                }
+
+                claims, err := r.parseToken(tokenString)
+                if err != nil {
+                    return "", err
+                }
+
+                return claims.Subject, nil
+            }
+
+
+
+    ----------------------------------------------
+    internal/presentation/http/middleware/auth.go
+    ----------------------------------------------
+
+
+            func UserAuthMiddleware(a auth.Repository, skippers ...SkipperFunc) gin.HandlerFunc {
+
+                // if !configs.C.JWTAuth.Enable {
+                // 	return func(c *gin.Context) {
+                // 		wrapUserAuthContext(c, configs.C.Root.UserName)
+                // 		c.Next()
+                // 	}
+                // }
+
+                // TODO. Look at the original files. Handle Authentication.
+
+                return func(c *gin.Context) {
+
+                    if SkipHandler(c, skippers...) {
+                        c.Next()
+                        return
+                    }		
+                    //wrapUserAuthContext(c, configs.C.Root.UserName)
+
+                    userID, err := a.ParseUserID(c.Request.Context(), http.GetToken(c))
+                    if err != nil {
+                        if err == auth.ErrInvalidToken {
+                            // if configs.C.IsDebugMode() {
+                            // 	wrapUserAuthContext(c, configs.C.Root.UserName)
+                            // 	c.Next()
+                            // 	return
+                            // }
+                            http.ResError(c, errors.ErrInvalidToken)
+                            return
+                        }
+                        http.ResError(c, errors.WithStack(err))
+                        return
+                    }
+
+                    //wrapUserAuthContext(c, "root")
+                    wrapUserAuthContext(c, userID)
+                    c.Next()
+                }
+
+            }
+
+
+
+
+    ---------------------------------------------
+    internal/presentation/http/middleware/casbin.go
+    ---------------------------------------------
+
+            func CasbinMiddleware(enforcer *casbin.SyncedEnforcer, skippers ...SkipperFunc) gin.HandlerFunc {
+                cfg := configs.C.Casbin
+
+                if !cfg.Enable {
+                    return EmptyMiddleware()
+                }
+
+                return func(c *gin.Context) {
+
+                    if SkipHandler(c, skippers...) {
+                        c.Next()
+                        return
+                    }
+
+                    p := c.Request.URL.Path
+                    m := c.Request.Method
+
+                    //TODO debug mode
+                    //fmt.Println(http.GetUserID(c), p, m)
+
+                    if b, err := enforcer.Enforce(http.GetUserID(c), p, m); err != nil {
+                        http.ResError(c, errors.WithStack(err))
+                        return
+                    } else if !b {
+                        http.ResError(c, errors.ErrNoPerm)
+                        return
+                    }
+                    c.Next()
+                }
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,1199 @@
+Если хочешь сохранить данные - явно создай волюм.
+
+
+Connecting PgAdmin to PostgreSQL
+To connect PgAdmin to your PostgreSQL database within the shared network:
+
+    Open PgAdmin in your browser.
+    Right-click on "Servers" in the left pane and select "Create" -> "Server".
+        - In the "General" tab, name your server (e.g., template_go_react_pg).
+        - In the "Connection" tab, set the following:
+        - Host name/address: postgres (this is the name of the PostgreSQL service in Docker Compose).
+        - Port: 5432
+        - Username: postgres
+        - Password: okokokok
+    Click "Save".
+
+    Елси запускаем из docker-compose:
+            - Host: имя сервайса (postgres в данном случае)
+            - Port: 5432
+            - Username: postgres
+            - Password: okokokok
+
+
+
+
+
+
+
+
+
+docker run bash in already executed container?
+    docker exec -it template_go_react_pg bash
+    root@82b210f6a650:/# psql -U postgres -d casbin
+
+    casbin=# \df
+                            List of functions
+        Schema | Name | Result data type | Argument data types | Type 
+        --------+------+------------------+---------------------+------
+        (0 rows)
+    
+
+
+In psql, you can use the \dt command to list all tables in the current database:
+    Нихуя не работает.
+
+
+psql -U postgres
+    postgres=# \l
+
+        postgres=# \l
+                                                            List of databases
+        Name    |  Owner   | Encoding | Locale Provider |  Collate   |   Ctype    | ICU Locale | ICU Rules |   Access privileges   
+        -----------+----------+----------+-----------------+------------+------------+------------+-----------+-----------------------
+        casbin    | postgres | UTF8     | libc            | en_US.utf8 | en_US.utf8 |            |           | 
+        postgres  | postgres | UTF8     | libc            | en_US.utf8 | en_US.utf8 |            |           | 
+        template0 | postgres | UTF8     | libc            | en_US.utf8 | en_US.utf8 |            |           | =c/postgres          +
+                |          |          |                 |            |            |            |           | postgres=CTc/postgres
+        template1 | postgres | UTF8     | libc            | en_US.utf8 | en_US.utf8 |            |           | =c/postgres          +
+                |          |          |                 |            |            |            |           | postgres=CTc/postgres
+        (4 rows)
+
+
+
+
+
+SELECT table_schema, table_name
+FROM information_schema.tables
+WHERE table_type = 'BASE TABLE'
+AND table_schema NOT IN ('pg_catalog', 'information_schema');
+    Это работает.
+
+SELECT table_name FROM information_schema.tables;
+    Это работает.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Run the PostgreSQL container interactively:
+    docker run -it --name postgres_interactive -e POSTGRES_USER=exampleuser -e POSTGRES_PASSWORD=examplepass -e POSTGRES_DB=exampledb -p 5432:5432 postgres:13 bash
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////
+остальной кусок docker-compose_pg.yaml
+
+
+  frontend:
+    build:
+      context: ./react-admin-template
+      dockerfile: Dockerfile
+    image: template_go_react_react_cui  
+    container_name: template_go_react_react_cui
+    ports:
+      - "3000:3000"
+    networks:
+      - template_go_react_network
+    environment:
+      - VITE_PROXY_TARGET=http://template_go_react_golang:8080
+    depends_on:
+      - backend
+//////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+version: '3.8'
+
+services:
+  db:
+    image: postgres:13
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: examplepass
+      POSTGRES_DB: exampledb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init_db:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+
+volumes:
+  db_data:
+
+
+
+
+Why do I need the:
+    environment:
+      POSTGRES_USER: exampleuser
+      POSTGRES_PASSWORD: examplepass
+      POSTGRES_DB: exampledb
+
+in docker-compose?
+
+
+The environment section in your docker-compose.yml file is used to set environment variables 
+that configure the PostgreSQL container. 
+These variables are critical for initializing the database with the desired configuration. 
+Here's a breakdown of why each variable is necessary:
+
+    POSTGRES_USER: Specifies the username for the default PostgreSQL user.
+    POSTGRES_PASSWORD: Sets the password for the default PostgreSQL user.
+    POSTGRES_DB: Defines the name of the default database to be created.
+
+
+Why These Environment Variables Are Important
+
+Initialization: 
+    When a PostgreSQL container starts, 
+    it runs an initialization process if it detects that the database directory is empty. 
+    During this initialization, it uses these environment variables to set up the initial state of the database.
+
+
+Database Creation: 
+    The POSTGRES_DB environment variable specifies the name of the default database 
+    that will be created when the container is first started. 
+    This is useful if your application expects a specific database to be present.
+
+
+User Authentication: 
+    The POSTGRES_USER and POSTGRES_PASSWORD environment variables create a default user 
+        with the specified username and password. 
+    This user is granted superuser privileges, making it capable of creating new databases and schemas.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+In what order scripts in /docker-entrypoint-initdb.d will be executed?
+
+Scripts in the /docker-entrypoint-initdb.d directory 
+are executed in lexicographical order by the PostgreSQL Docker entrypoint. 
+This means that the scripts are processed in the order determined by the ASCII values of their filenames.
+
+1) Lexicographical Order: 
+    This order is similar to alphabetical order but takes into account all characters in the filenames. For example:
+
+    01_create_schema.sql
+    02_create_tables.sql
+    03_insert_data.sql
+    init.sql
+
+
+2) Script Extensions: 
+    The PostgreSQL entrypoint supports scripts with extensions like .sh (shell scripts) and .sql (SQL scripts).
+
+3) Script Execution:
+
+    .sh scripts are executed using the shell.
+    .sql scripts are executed using the psql command.
+
+
+
+Example Setup
+To ensure scripts are executed in the correct order, you can prefix your script filenames with numbers:
+
+
+/docker-entrypoint-initdb.d/
+    00_create_database.sh
+├── 01_create_schema.sql
+├── 02_create_tables.sql
+├── 03_insert_data.sql
+├── 04_add_indexes.sql
+└── 05_create_views.sql
+
+In this setup, the scripts will be executed in the numerical order defined by their prefixes.
+
+
+00_create_database.sh:
+
+#!/bin/bash
+set -e
+
+# Default values of environment variables
+: "${POSTGRES_DB:=exampledb}"
+: "${POSTGRES_USER:=exampleuser}"
+
+# Creating a new database
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    CREATE DATABASE anotherdb;
+EOSQL
+
+
+
+01_create_schema.sql:
+
+    CREATE SCHEMA IF NOT EXISTS exampleschema;
+
+
+02_create_tables.sql:
+
+    CREATE TABLE IF NOT EXISTS exampleschema.exampletable (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+
+
+
+03_insert_data.sql:
+
+    INSERT INTO exampleschema.exampletable (name) VALUES ('Sample Data');
+
+
+04_add_indexes.sql:
+
+    CREATE INDEX idx_name ON exampleschema.exampletable(name);
+
+
+05_create_views.sql:
+
+    CREATE VIEW exampleschema.exampleview AS
+    SELECT id, name FROM exampleschema.exampletable;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+What does this means in bash?
+    : "${POSTGRES_DB:=postgres}"
+
+
+This line is a bash statement used for assigning a default value to a variable. Here's a breakdown:
+
+:: This colon at the beginning might seem unusual, but it's a special construct in bash used for command substitution. 
+In this case, it ensures the following command executes before variable assignment.
+
+
+${POSTGRES_DB:=postgres}: This is the actual command substitution. Here's how it works:
+
+
+$POSTGRES_DB: This checks if a variable named POSTGRES_DB already exists in your current bash session.
+
+
+:=: This is a compound assignment operator. 
+    It checks the condition on the left side (variable existence) and assigns the value on the right side (in this case, "postgres") 
+    if the left side evaluates to false.
+
+
+:=: This is the part that assigns the default value. 
+    It checks if $POSTGRES_DB is empty or unset. If it is, it assigns the value "postgres" to POSTGRES_DB.
+
+
+
+In simpler terms:
+
+This line ensures that the variable POSTGRES_DB is set and has a value. If POSTGRES_DB is already defined (and has any value), 
+it leaves it unchanged. But if POSTGRES_DB is undefined or empty, it assigns the default value "postgres" to it.
+
+Benefits:
+
+This approach helps avoid errors in scripts that rely on POSTGRES_DB being set.
+It provides a fallback value if the variable isn't explicitly defined elsewhere.
+Example:
+
+Imagine you have a script that uses $POSTGRES_DB to connect to a PostgreSQL database. Without this line, 
+if POSTGRES_DB isn't set before running the script, you might encounter an error. 
+This line ensures a default value is available even if not explicitly defined.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Тут в отличие от Mongodb мы работаем так,
+Создаем image, создаем container ы.
+И забрасываем через веб интерфейс тут схему, так как нужны права
+суперпользователя чтобы туда все запилить.
+
+Ну хз.
+Попробуем создать из кода.
+    База данных и pgсхема должны уже быть созданы до подключения из pgx.
+    Во прервых, это требует прав, во воторых сама строка подключения содержит базу данных:
+    casbinDatabaseUrl := "postgres://postgres:okokokokd@localhost:5432/casbin"
+
+    Поэтому руками запускаем casbin_schema_create.sql
+    Бля, ну а как же тогда прямо автоза
+
+----------------------------------------------------------
+menu
+----------------------------------------------------------
+
+weather> db.menu.find()
+[
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad50'),
+    id: 'dashboard::/dashboard',
+    name: 'Dashboard',
+    sequence: 9,
+    icon: 'dashboard',
+    router: '/dashboard',
+    parentid: '',
+    parentpath: '',
+    showstatus: 1,
+    status: 1,
+    memo: '',
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad5e'),
+    id: 'demo::/example/demo',
+    name: 'DEMO',
+    sequence: 8,
+    icon: 'tag',
+    router: '/example/demo',
+    parentid: '',
+    parentpath: '',
+    showstatus: 1,
+    status: 1,
+    memo: '',
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad61'),
+    id: 'weather::/weather',
+    name: 'WEATHER',
+    sequence: 8,
+    icon: 'tag',
+    router: '/weather',
+    parentid: '',
+    parentpath: '',
+    showstatus: 1,
+    status: 1,
+    memo: '',
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad66'),
+    id: 'longpooling::/example/demo/pubsub',
+    name: 'LONGPOOLING',
+    sequence: 9,
+    icon: 'tag',
+    router: '/example/demo/pubsub',
+    parentid: '',
+    parentpath: '',
+    showstatus: 1,
+    status: 1,
+    memo: '',
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad67'),
+    id: 'system_setting::',
+    name: 'System Setting',
+    sequence: 7,
+    icon: 'setting',
+    router: '',
+    parentid: '',
+    parentpath: '',
+    showstatus: 1,
+    status: 1,
+    memo: '',
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad76'),
+    id: 'menu::/system/menu',
+    name: 'Menu',
+    sequence: 9,
+    icon: 'solution',
+    router: '/system/menu',
+    parentid: 'system_setting::',
+    parentpath: '',
+    showstatus: 1,
+    status: 1,
+    memo: '',
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad86'),
+    id: 'role::/system/role',
+    name: 'Role',
+    sequence: 8,
+    icon: 'audit',
+    router: '/system/role',
+    parentid: 'system_setting::',
+    parentpath: '',
+    showstatus: 1,
+    status: 1,
+    memo: '',
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad96'),
+    id: 'user::/system/user',
+    name: 'User',
+    sequence: 7,
+    icon: 'user',
+    router: '/system/user',
+    parentid: 'system_setting::',
+    parentpath: '',
+    showstatus: 1,
+    status: 1,
+    memo: '',
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  }
+]
+
+
+
+
+----------------------------------------------------------
+menuaction
+----------------------------------------------------------
+
+weather> db.menuaction.find()
+[
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad51'),
+    id: 'demo::/example/demo::add',
+    menuid: 'demo::/example/demo',
+    code: 'add',
+    name: 'Add'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad53'),
+    id: 'demo::/example/demo::edit',
+    menuid: 'demo::/example/demo',
+    code: 'edit',
+    name: 'Edit'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad56'),
+    id: 'demo::/example/demo::del',
+    menuid: 'demo::/example/demo',
+    code: 'del',
+    name: 'Delete'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad58'),
+    id: 'demo::/example/demo::query',
+    menuid: 'demo::/example/demo',
+    code: 'query',
+    name: 'Search'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad5a'),
+    id: 'demo::/example/demo::disable',
+    menuid: 'demo::/example/demo',
+    code: 'disable',
+    name: 'Disable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad5c'),
+    id: 'demo::/example/demo::enable',
+    menuid: 'demo::/example/demo',
+    code: 'enable',
+    name: 'Enable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad5f'),
+    id: 'weather::/weather::query',
+    menuid: 'weather::/weather',
+    code: 'query',
+    name: 'Search'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad62'),
+    id: 'longpooling::/example/demo/pubsub::subscribe',
+    menuid: 'longpooling::/example/demo/pubsub',
+    code: 'subscribe',
+    name: 'Subscribe'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad64'),
+    id: 'longpooling::/example/demo/pubsub::publish',
+    menuid: 'longpooling::/example/demo/pubsub',
+    code: 'publish',
+    name: 'Publish'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad68'),
+    id: 'menu::/system/menu::add',
+    menuid: 'menu::/system/menu',
+    code: 'add',
+    name: 'Add'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad6a'),
+    id: 'menu::/system/menu::edit',
+    menuid: 'menu::/system/menu',
+    code: 'edit',
+    name: 'Edit'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad6d'),
+    id: 'menu::/system/menu::del',
+    menuid: 'menu::/system/menu',
+    code: 'del',
+    name: 'Delete'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad6f'),
+    id: 'menu::/system/menu::query',
+    menuid: 'menu::/system/menu',
+    code: 'query',
+    name: 'Search'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad72'),
+    id: 'menu::/system/menu::disable',
+    menuid: 'menu::/system/menu',
+    code: 'disable',
+    name: 'Disable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad74'),
+    id: 'menu::/system/menu::enable',
+    menuid: 'menu::/system/menu',
+    code: 'enable',
+    name: 'Enable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad77'),
+    id: 'role::/system/role::add',
+    menuid: 'role::/system/role',
+    code: 'add',
+    name: 'Add'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad7a'),
+    id: 'role::/system/role::edit',
+    menuid: 'role::/system/role',
+    code: 'edit',
+    name: 'Edit'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad7e'),
+    id: 'role::/system/role::del',
+    menuid: 'role::/system/role',
+    code: 'del',
+    name: 'Delete'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad80'),
+    id: 'role::/system/role::query',
+    menuid: 'role::/system/role',
+    code: 'query',
+    name: 'Search'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad82'),
+    id: 'role::/system/role::disable',
+    menuid: 'role::/system/role',
+    code: 'disable',
+    name: 'Disable'
+  }
+]
+
+
+
+
+----------------------------------------------------------
+menuactionresource
+----------------------------------------------------------
+
+weather> db.menuactionresource.find()
+[
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad52'),
+    id: 'demo::/example/demo::add::POST::/api/v1/demos',
+    actionid: 'demo::/example/demo::add',
+    method: 'POST',
+    path: '/api/v1/demos'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad54'),
+    id: 'demo::/example/demo::edit::GET::/api/v1/demos/:id',
+    actionid: 'demo::/example/demo::edit',
+    method: 'GET',
+    path: '/api/v1/demos/:id'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad55'),
+    id: 'demo::/example/demo::edit::PUT::/api/v1/demos/:id',
+    actionid: 'demo::/example/demo::edit',
+    method: 'PUT',
+    path: '/api/v1/demos/:id'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad57'),
+    id: 'demo::/example/demo::del::DELETE::/api/v1/demos/:id',
+    actionid: 'demo::/example/demo::del',
+    method: 'DELETE',
+    path: '/api/v1/demos/:id'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad59'),
+    id: 'demo::/example/demo::query::GET::/api/v1/demos',
+    actionid: 'demo::/example/demo::query',
+    method: 'GET',
+    path: '/api/v1/demos'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad5b'),
+    id: 'demo::/example/demo::disable::PATCH::/api/v1/demos/:id/disable',
+    actionid: 'demo::/example/demo::disable',
+    method: 'PATCH',
+    path: '/api/v1/demos/:id/disable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad5d'),
+    id: 'demo::/example/demo::enable::PATCH::/api/v1/demos/:id/enable',
+    actionid: 'demo::/example/demo::enable',
+    method: 'PATCH',
+    path: '/api/v1/demos/:id/enable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad60'),
+    id: 'weather::/weather::query::GET::/api/v1/weather/:id',
+    actionid: 'weather::/weather::query',
+    method: 'GET',
+    path: '/api/v1/weather/:id'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad63'),
+    id: 'longpooling::/example/demo/pubsub::subscribe::GET::/api/v1/demos/pubsub/:id',
+    actionid: 'longpooling::/example/demo/pubsub::subscribe',
+    method: 'GET',
+    path: '/api/v1/demos/pubsub/:id'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad65'),
+    id: 'longpooling::/example/demo/pubsub::publish::POST::/api/v1/demos/pubsub',
+    actionid: 'longpooling::/example/demo/pubsub::publish',
+    method: 'POST',
+    path: '/api/v1/demos/pubsub'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad69'),
+    id: 'menu::/system/menu::add::POST::/api/v1/menus',
+    actionid: 'menu::/system/menu::add',
+    method: 'POST',
+    path: '/api/v1/menus'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad6b'),
+    id: 'menu::/system/menu::edit::GET::/api/v1/menus/:id',
+    actionid: 'menu::/system/menu::edit',
+    method: 'GET',
+    path: '/api/v1/menus/:id'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad6c'),
+    id: 'menu::/system/menu::edit::PUT::/api/v1/menus/:id',
+    actionid: 'menu::/system/menu::edit',
+    method: 'PUT',
+    path: '/api/v1/menus/:id'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad6e'),
+    id: 'menu::/system/menu::del::DELETE::/api/v1/menus/:id',
+    actionid: 'menu::/system/menu::del',
+    method: 'DELETE',
+    path: '/api/v1/menus/:id'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad70'),
+    id: 'menu::/system/menu::query::GET::/api/v1/menus',
+    actionid: 'menu::/system/menu::query',
+    method: 'GET',
+    path: '/api/v1/menus'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad71'),
+    id: 'menu::/system/menu::query::GET::/api/v1/menus.tree',
+    actionid: 'menu::/system/menu::query',
+    method: 'GET',
+    path: '/api/v1/menus.tree'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad73'),
+    id: 'menu::/system/menu::disable::PATCH::/api/v1/menus/:id/disable',
+    actionid: 'menu::/system/menu::disable',
+    method: 'PATCH',
+    path: '/api/v1/menus/:id/disable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad75'),
+    id: 'menu::/system/menu::enable::PATCH::/api/v1/menus/:id/enable',
+    actionid: 'menu::/system/menu::enable',
+    method: 'PATCH',
+    path: '/api/v1/menus/:id/enable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad78'),
+    id: 'role::/system/role::add::GET::/api/v1/menus.tree',
+    actionid: 'role::/system/role::add',
+    method: 'GET',
+    path: '/api/v1/menus.tree'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad79'),
+    id: 'role::/system/role::add::POST::/api/v1/roles',
+    actionid: 'role::/system/role::add',
+    method: 'POST',
+    path: '/api/v1/roles'
+  }
+]
+
+
+----------------------------------------------------------
+role
+----------------------------------------------------------
+
+weather> db.role.find()
+[
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad9d'),
+    id: 'menu_admin',
+    name: 'menu_admin',
+    sequence: 1,
+    memo: '',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad9f'),
+    id: 'menu_viewer',
+    name: 'menu_viewer',
+    sequence: 1,
+    memo: '',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada6'),
+    id: 'role_admin',
+    name: 'role_admin',
+    sequence: 1,
+    memo: '',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada8'),
+    id: 'role_viewer',
+    name: 'role_viewer',
+    sequence: 1,
+    memo: '',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adaf'),
+    id: 'user_admin',
+    name: 'user_admin',
+    sequence: 1,
+    memo: '',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adb1'),
+    id: 'user_viewer',
+    name: 'user_viewer',
+    sequence: 1,
+    memo: '',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adbc'),
+    id: 'demo_user',
+    name: 'demo_user',
+    sequence: 1,
+    memo: '',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  }
+]
+
+
+----------------------------------------------------------
+rolemenu
+----------------------------------------------------------
+
+weather> db.rolemenu.find()
+[
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad97'),
+    id: 'menu_admin::menu::/system/menu::add',
+    roleid: 'menu_admin',
+    menuid: 'menu::/system/menu',
+    actionid: 'menu::/system/menu::add'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad98'),
+    id: 'menu_admin::menu::/system/menu::edit',
+    roleid: 'menu_admin',
+    menuid: 'menu::/system/menu',
+    actionid: 'menu::/system/menu::edit'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad99'),
+    id: 'menu_admin::menu::/system/menu::del',
+    roleid: 'menu_admin',
+    menuid: 'menu::/system/menu',
+    actionid: 'menu::/system/menu::del'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad9a'),
+    id: 'menu_admin::menu::/system/menu::query',
+    roleid: 'menu_admin',
+    menuid: 'menu::/system/menu',
+    actionid: 'menu::/system/menu::query'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad9b'),
+    id: 'menu_admin::menu::/system/menu::disable',
+    roleid: 'menu_admin',
+    menuid: 'menu::/system/menu',
+    actionid: 'menu::/system/menu::disable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad9c'),
+    id: 'menu_admin::menu::/system/menu::enable',
+    roleid: 'menu_admin',
+    menuid: 'menu::/system/menu',
+    actionid: 'menu::/system/menu::enable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ad9e'),
+    id: 'menu_viewer::menu::/system/menu::query',
+    roleid: 'menu_viewer',
+    menuid: 'menu::/system/menu',
+    actionid: 'menu::/system/menu::query'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada0'),
+    id: 'role_admin::role::/system/role::add',
+    roleid: 'role_admin',
+    menuid: 'role::/system/role',
+    actionid: 'role::/system/role::add'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada1'),
+    id: 'role_admin::role::/system/role::edit',
+    roleid: 'role_admin',
+    menuid: 'role::/system/role',
+    actionid: 'role::/system/role::edit'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada2'),
+    id: 'role_admin::role::/system/role::del',
+    roleid: 'role_admin',
+    menuid: 'role::/system/role',
+    actionid: 'role::/system/role::del'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada3'),
+    id: 'role_admin::role::/system/role::query',
+    roleid: 'role_admin',
+    menuid: 'role::/system/role',
+    actionid: 'role::/system/role::query'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada4'),
+    id: 'role_admin::role::/system/role::disable',
+    roleid: 'role_admin',
+    menuid: 'role::/system/role',
+    actionid: 'role::/system/role::disable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada5'),
+    id: 'role_admin::role::/system/role::enable',
+    roleid: 'role_admin',
+    menuid: 'role::/system/role',
+    actionid: 'role::/system/role::enable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada7'),
+    id: 'role_viewer::role::/system/role::query',
+    roleid: 'role_viewer',
+    menuid: 'role::/system/role',
+    actionid: 'role::/system/role::query'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818ada9'),
+    id: 'user_admin::user::/system/user::add',
+    roleid: 'user_admin',
+    menuid: 'user::/system/user',
+    actionid: 'user::/system/user::add'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adaa'),
+    id: 'user_admin::user::/system/user::edit',
+    roleid: 'user_admin',
+    menuid: 'user::/system/user',
+    actionid: 'user::/system/user::edit'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adab'),
+    id: 'user_admin::user::/system/user::del',
+    roleid: 'user_admin',
+    menuid: 'user::/system/user',
+    actionid: 'user::/system/user::del'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adac'),
+    id: 'user_admin::user::/system/user::query',
+    roleid: 'user_admin',
+    menuid: 'user::/system/user',
+    actionid: 'user::/system/user::query'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adad'),
+    id: 'user_admin::user::/system/user::disable',
+    roleid: 'user_admin',
+    menuid: 'user::/system/user',
+    actionid: 'user::/system/user::disable'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adae'),
+    id: 'user_admin::user::/system/user::enable',
+    roleid: 'user_admin',
+    menuid: 'user::/system/user',
+    actionid: 'user::/system/user::enable'
+  }
+]
+
+
+----------------------------------------------------------
+user
+----------------------------------------------------------
+
+weather> db.user.find()
+[
+  {
+    _id: ObjectId('667fd7914f0208fb2818adbe'),
+    id: 'Andriy',
+    username: 'Andriy',
+    realname: 'Andriy Kutsevol',
+    password: '7110eda4d09e062aa5e4a390b0a572ac0d2c0220',
+    email: 'some@email.com',
+    phone: '+1808843254678',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adc2'),
+    id: 'andriy_system_viewer',
+    username: 'andriy_system_viewer',
+    realname: 'Andriy Kutsevol',
+    password: '7110eda4d09e062aa5e4a390b0a572ac0d2c0220',
+    email: 'some@email.com',
+    phone: '+1808843254678',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adc6'),
+    id: 'admin',
+    username: 'admin',
+    realname: 'Andriy Kutsevol',
+    password: '7110eda4d09e062aa5e4a390b0a572ac0d2c0220',
+    email: 'some@email.com',
+    phone: '+1808843254678',
+    status: 1,
+    creator: '',
+    createdat: ISODate('0001-01-01T00:00:00.000Z'),
+    updatedat: ISODate('0001-01-01T00:00:00.000Z'),
+    deletedat: null
+  }
+]
+
+
+
+----------------------------------------------------------
+userrole
+----------------------------------------------------------
+
+
+weather> db.userrole.find()
+[
+  {
+    _id: ObjectId('667fd7914f0208fb2818adbd'),
+    id: 'Andriy::demo_user',
+    userid: 'Andriy',
+    roleid: 'demo_user'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adbf'),
+    id: 'andriy_system_viewer::menu_viewer',
+    userid: 'andriy_system_viewer',
+    roleid: 'menu_viewer'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adc0'),
+    id: 'andriy_system_viewer::role_viewer',
+    userid: 'andriy_system_viewer',
+    roleid: 'role_viewer'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adc1'),
+    id: 'andriy_system_viewer::user_viewer',
+    userid: 'andriy_system_viewer',
+    roleid: 'user_viewer'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adc3'),
+    id: 'admin::menu_admin',
+    userid: 'admin',
+    roleid: 'menu_admin'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adc4'),
+    id: 'admin::role_admin',
+    userid: 'admin',
+    roleid: 'role_admin'
+  },
+  {
+    _id: ObjectId('667fd7914f0208fb2818adc5'),
+    id: 'admin::user_admin',
+    userid: 'admin',
+    roleid: 'user_admin'
+  }
+]
+
+
+
+
+
+
+
+
+
+
+
+
+

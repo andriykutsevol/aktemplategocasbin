@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+
+  mongodb:
+    image: mongo:latest
+    container_name: template_go_react_mongodb
+    ports:
+      - "27017:27017"
+    networks:
+      - template_go_react_network      
+
+  backend:
+    build:
+      context: ./golang-ddd-template
+      dockerfile: Dockerfile
+    image: template_go_react_golang
+    container_name: template_go_react_golang
+    environment:
+      - DBTYPE=mongo
+      - MONGOURI=mongodb://mongodb:27017
+    ports:
+      - "8080:8080"
+    networks:
+      - template_go_react_network
+    depends_on:
+      - mongodb
+
+  frontend:
+    build:
+      context: ./react-admin-template
+      dockerfile: Dockerfile
+    image: template_go_react_react_cui  
+    container_name: template_go_react_react_cui
+    ports:
+      - "3000:3000"
+    networks:
+      - template_go_react_network
+    environment:
+      - VITE_PROXY_TARGET=http://template_go_react_golang:8080
+    depends_on:
+      - backend
+
+
+networks:
+  template_go_react_network:
+    driver: bridge 
