@@ -1,5 +1,5 @@
 # aktemplategocasbin
-Golang DDD template with support of Casbin, MongoDB, Redis, GRPC, etc...
+Golang DDD template with support of Casbin, PostgreSQL, MongoDB, Redis, GRPC, etc...
 
 This project is based on https://github.com/linzhengen/ddd-gin-admin
 
